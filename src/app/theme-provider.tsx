@@ -18,6 +18,9 @@ export default function ThemeProvider({
       } else {
         document.documentElement.classList.remove("dark");
       }
+
+      // Remove the no-theme-yet class to make content visible
+      document.documentElement.classList.remove("no-theme-yet");
     };
 
     // Apply theme initially
