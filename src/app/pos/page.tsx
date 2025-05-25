@@ -3,13 +3,33 @@
 import React, {FormEvent, useEffect, useState, useCallback, useMemo, memo} from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { Product, type CartItem, ProductCardProps, CartItemProps } from "./pos.types";
+import { Product, type CartItem, ProductCardProps, CartItemProps, FailureReason, PaymentDetails } from "./pos.types";
 
 // Dynamically import the CheckoutModal component to reduce initial bundle size
 const CheckoutModal = dynamic(() => import("./CheckoutModal"), {
   loading: () => <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div className="bg-background rounded-lg shadow-xl p-6 w-full max-w-md">
       <p className="text-center">Loading checkout...</p>
+    </div>
+  </div>,
+  ssr: false, // Disable server-side rendering for this component
+});
+
+// Dynamically import the TransactionCompleteModal component
+const TransactionCompleteModal = dynamic(() => import("./TransactionCompleteModal"), {
+  loading: () => <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-background rounded-lg shadow-xl p-6 w-full max-w-md">
+      <p className="text-center">Loading...</p>
+    </div>
+  </div>,
+  ssr: false, // Disable server-side rendering for this component
+});
+
+// Dynamically import the TransactionFailedModal component
+const TransactionFailedModal = dynamic(() => import("./TransactionFailedModal"), {
+  loading: () => <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-background rounded-lg shadow-xl p-6 w-full max-w-md">
+      <p className="text-center">Loading...</p>
     </div>
   </div>,
   ssr: false, // Disable server-side rendering for this component
@@ -131,7 +151,11 @@ export default function POSPage() {
   // Initialize cart with empty array to avoid hydration mismatch
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isTransactionCompleteModalOpen, setIsTransactionCompleteModalOpen] = useState(false);
+  const [isTransactionFailedModalOpen, setIsTransactionFailedModalOpen] = useState(false);
+  const [failureReason, setFailureReason] = useState<FailureReason>('invalid_cvv');
   const [searchQuery, setSearchQuery] = useState("");
+  const [lastPaymentDetails, setLastPaymentDetails] = useState<PaymentDetails | undefined>(undefined);
   const [sortMethod, setSortMethod] = useState<"sequential" | "alphabetical">("sequential");
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
@@ -253,27 +277,48 @@ export default function POSPage() {
   }, [cart, sortMethod, updateQuantity, removeItem]);
 
   // Handle checkout form submission - memoized to prevent unnecessary re-renders
-  const handleCheckoutSubmit = useCallback((e: FormEvent) => {
+  const handleCheckoutSubmit = useCallback((e: FormEvent, paymentDetails: PaymentDetails) => {
     e.preventDefault();
-    // Here you would typically process the payment
-    // For this example, we'll just close the modal and clear the cart
-    alert('Payment successful!');
-    setIsCheckoutModalOpen(false);
-    setCart([]);
 
-    // Reset to default settings after successful checkout
-    try {
-      localStorage.removeItem('posCart');
-      // Reset sort method to sequential (default)
-      setSortMethod("sequential");
-      localStorage.setItem('posSortMethod', 'sequential');
-      // Reset view mode to card (default)
-      setViewMode("card");
-      localStorage.setItem('posViewMode', 'card');
-    } catch (error) {
-      console.error('Error clearing data from localStorage:', error);
+    // Close the checkout modal
+    setIsCheckoutModalOpen(false);
+
+    // Simulate a 5% transaction failure rate
+    const shouldFail = Math.random() < 0.02;
+
+    if (shouldFail) {
+      // If transaction fails, randomly select one of the three failure types
+      const failureTypes: FailureReason[] = ['invalid_cvv', 'processor_failure', 'network_error'];
+      const randomFailureType = failureTypes[Math.floor(Math.random() * failureTypes.length)];
+
+      // Store the payment details for reuse
+      setLastPaymentDetails(paymentDetails);
+
+      // Set the failure reason and show the failure modal
+      setFailureReason(randomFailureType);
+      setIsTransactionFailedModalOpen(true);
+    } else {
+      // If transaction succeeds, show the success modal and clear the cart
+      setIsTransactionCompleteModalOpen(true);
+      setCart([]);
+
+      // Clear the last payment details
+      setLastPaymentDetails(undefined);
+
+      // Reset to default settings after successful checkout
+      try {
+        localStorage.removeItem('posCart');
+        // Reset sort method to sequential (default)
+        setSortMethod("sequential");
+        localStorage.setItem('posSortMethod', 'sequential');
+        // Reset view mode to card (default)
+        setViewMode("card");
+        localStorage.setItem('posViewMode', 'card');
+      } catch (error) {
+        console.error('Error clearing data from localStorage:', error);
+      }
     }
-  }, [setIsCheckoutModalOpen, setCart, setSortMethod, setViewMode]);
+  }, [setIsCheckoutModalOpen, setIsTransactionCompleteModalOpen, setIsTransactionFailedModalOpen, setFailureReason, setLastPaymentDetails, setCart, setSortMethod, setViewMode]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-foreground">
@@ -477,6 +522,24 @@ export default function POSPage() {
         taxAmount={taxAmount}
         cartTotal={cartTotal}
         onSubmit={handleCheckoutSubmit}
+        paymentDetails={lastPaymentDetails}
+      />
+
+      {/* Transaction Complete Modal */}
+      <TransactionCompleteModal
+        isOpen={isTransactionCompleteModalOpen}
+        onClose={() => setIsTransactionCompleteModalOpen(false)}
+      />
+
+      {/* Transaction Failed Modal */}
+      <TransactionFailedModal
+        isOpen={isTransactionFailedModalOpen}
+        onClose={() => {
+          setIsTransactionFailedModalOpen(false);
+          // Reopen the checkout modal with the stored payment details
+          setIsCheckoutModalOpen(true);
+        }}
+        failureReason={failureReason}
       />
     </div>
   );

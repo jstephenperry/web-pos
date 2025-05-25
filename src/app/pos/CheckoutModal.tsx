@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, memo } from 'react';
-import { CheckoutModalProps } from './pos.types';
+import React, { useState, memo, useEffect } from 'react';
+import { CheckoutModalProps, PaymentDetails } from './pos.types';
 
 // Checkout Modal Component
-const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtotal, taxRate, taxAmount, cartTotal, onSubmit }: CheckoutModalProps) {
+const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtotal, taxRate, taxAmount, cartTotal, onSubmit, paymentDetails }: CheckoutModalProps) {
   // Card brand definitions with patterns, max lengths, and CVV lengths
   const cardBrands = [
     { name: 'visa', pattern: /^4/, maxLength: 16, cvvLength: 3, icon: '💳 V' },
@@ -15,13 +15,17 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
     { name: 'jcb', pattern: /^35/, maxLength: 16, cvvLength: 3, icon: '💳 J' }
   ];
 
+  // State for payment details
+  const [cardName, setCardName] = useState<string>(paymentDetails?.cardName || '');
+  const [cardNumber, setCardNumber] = useState<string>(paymentDetails?.cardNumber || '');
+  const [expDate, setExpDate] = useState<string>(paymentDetails?.expDate || '');
+  const [cvv, setCvv] = useState<string>(paymentDetails?.cvv || '');
+
   // State for card brand
   const [cardBrand, setCardBrand] = useState<{ name: string; maxLength: number; cvvLength: number; icon: string } | null>(null);
 
   // State for expiration date error message
   const [expDateError, setExpDateError] = useState<string>('');
-
-  if (!isOpen) return null;
 
   // Function to identify card brand from number
   const identifyCardBrand = (cardNumber: string) => {
@@ -36,6 +40,27 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
     setCardBrand(brand || null);
     return brand;
   };
+
+  // Initialize card brand if cardNumber is provided
+  useEffect(() => {
+    if (paymentDetails?.cardNumber) {
+      identifyCardBrand(paymentDetails.cardNumber);
+    }
+  }, [paymentDetails?.cardNumber]);
+
+  // Reset form fields when paymentDetails changes
+  useEffect(() => {
+    setCardName(paymentDetails?.cardName || '');
+    setCardNumber(paymentDetails?.cardNumber || '');
+    setExpDate(paymentDetails?.expDate || '');
+    setCvv(paymentDetails?.cvv || '');
+
+    if (!paymentDetails?.cardNumber) {
+      setCardBrand(null);
+    }
+  }, [paymentDetails]);
+
+  if (!isOpen) return null;
 
   // Handle card number input change
   const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,6 +86,7 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
     }
 
     input.value = formattedValue;
+    setCardNumber(formattedValue);
   };
 
   // Function to format expiration date input (MM/YY)
@@ -104,6 +130,7 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
   const handleExpDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
     input.value = formatExpirationDate(input.value);
+    setExpDate(input.value);
 
     // Get the clean value (digits only)
     const cleanValue = input.value.replace(/\D/g, '');
@@ -163,6 +190,12 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
     // Remove any non-digit characters
     // Set the value
     input.value = input.value.replace(/\D/g, '');
+    setCvv(input.value);
+  };
+
+  // Handle card name input change
+  const handleCardNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCardName(e.target.value);
   };
 
   return (
@@ -197,7 +230,15 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
           <p className="text-sm text-gray-600 dark:text-gray-400">Please enter your payment details below</p>
         </div>
 
-        <form onSubmit={onSubmit} autoComplete="on">
+        <form onSubmit={(e) => {
+          const paymentDetails = {
+            cardName,
+            cardNumber,
+            expDate,
+            cvv
+          };
+          onSubmit(e, paymentDetails);
+        }} autoComplete="on">
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1" htmlFor="cardName">
               Name on Card
@@ -209,6 +250,8 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
               autoComplete="cc-name"
               className="w-full p-3 border border-input-border bg-input-background text-input-foreground rounded-md text-base"
               placeholder="John Doe"
+              value={cardName}
+              onChange={handleCardNameChange}
               required
             />
           </div>
@@ -225,6 +268,7 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
                 autoComplete="cc-number"
                 className="w-full p-3 border border-input-border bg-input-background text-input-foreground rounded-md text-base"
                 placeholder="1234 5678 9012 3456"
+                value={cardNumber}
                 onChange={handleCardNumberChange}
                 required
               />
@@ -248,6 +292,7 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
                 autoComplete="cc-exp"
                 className={`w-full p-3 border ${expDateError ? 'border-red-500' : 'border-input-border'} bg-input-background text-input-foreground rounded-md text-base`}
                 placeholder="MM/YY"
+                value={expDate}
                 onChange={handleExpDateChange}
                 maxLength={5}
                 required
@@ -269,6 +314,7 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
                 autoComplete="cc-csc"
                 className="w-full p-3 border border-input-border bg-input-background text-input-foreground rounded-md text-base"
                 placeholder="123"
+                value={cvv}
                 onChange={handleCvvChange}
                 maxLength={cardBrand ? cardBrand.cvvLength : 3}
                 required
