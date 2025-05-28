@@ -24,6 +24,57 @@ export interface CartItemProps {
   onRemove: (id: number) => void;
 }
 
+// Payment API interfaces based on Swagger spec
+export interface Address {
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  countryCode?: string;
+}
+
+export interface Card {
+  number: string;
+  expiryMonth: number;
+  expiryYear: number;
+  cvv: string;
+  cardholderName: string;
+  brand?: string;
+}
+
+export interface PaymentRequest {
+  merchantReference?: string;
+  amount: number;
+  currencyCode: string;
+  card: Card;
+  billingAddress?: Address;
+  shippingAddress?: Address;
+  customerEmail?: string;
+  description?: string;
+  recurring?: boolean;
+  storeCard?: boolean;
+}
+
+export type PaymentStatus = 'AUTHORIZED' | 'CAPTURED' | 'DECLINED' | 'ERROR' | 'PENDING';
+
+export interface PaymentResponse {
+  merchantReference?: string;
+  transactionId?: string;
+  status?: PaymentStatus;
+  amount?: number;
+  currencyCode?: string;
+  timestamp?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  authorizationCode?: string;
+  last4?: string;
+  cardBrand?: string;
+  cardToken?: string;
+  rawResponse?: string;
+}
+
+// Legacy payment details interface (kept for backward compatibility)
 export interface PaymentDetails {
   cardName?: string;
   cardNumber?: string;

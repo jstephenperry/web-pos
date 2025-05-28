@@ -1,19 +1,19 @@
 "use client";
 
-import React, { useState, memo, useEffect } from 'react';
-import { CheckoutModalProps, PaymentDetails } from './pos.types';
+import React, { useState, memo, useEffect, useCallback, useMemo } from 'react';
+import { CheckoutModalProps } from './pos.types';
 
 // Checkout Modal Component
 const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtotal, taxRate, taxAmount, cartTotal, onSubmit, paymentDetails }: CheckoutModalProps) {
   // Card brand definitions with patterns, max lengths, and CVV lengths
-  const cardBrands = [
+  const cardBrands = useMemo(() => [
     { name: 'visa', pattern: /^4/, maxLength: 16, cvvLength: 3, icon: '💳 V' },
     { name: 'mastercard', pattern: /^5[1-5]/, maxLength: 16, cvvLength: 3, icon: '💳 M' },
     { name: 'amex', pattern: /^3[47]/, maxLength: 15, cvvLength: 4, icon: '💳 A' },
     { name: 'discover', pattern: /^6(?:011|5)/, maxLength: 16, cvvLength: 3, icon: '💳 D' },
     { name: 'diners', pattern: /^3(?:0[0-5]|[68])/, maxLength: 14, cvvLength: 3, icon: '💳 DC' },
     { name: 'jcb', pattern: /^35/, maxLength: 16, cvvLength: 3, icon: '💳 J' }
-  ];
+  ], []);
 
   // State for payment details
   const [cardName, setCardName] = useState<string>(paymentDetails?.cardName || '');
@@ -28,7 +28,7 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
   const [expDateError, setExpDateError] = useState<string>('');
 
   // Function to identify card brand from number
-  const identifyCardBrand = (cardNumber: string) => {
+  const identifyCardBrand = useCallback((cardNumber: string) => {
     const cleanNumber = cardNumber.replace(/\D/g, '');
 
     if (!cleanNumber) {
@@ -39,14 +39,14 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
     const brand = cardBrands.find(brand => brand.pattern.test(cleanNumber));
     setCardBrand(brand || null);
     return brand;
-  };
+  }, [cardBrands]);
 
   // Initialize card brand if cardNumber is provided
   useEffect(() => {
     if (paymentDetails?.cardNumber) {
       identifyCardBrand(paymentDetails.cardNumber);
     }
-  }, [paymentDetails?.cardNumber]);
+  }, [identifyCardBrand, paymentDetails?.cardNumber]);
 
   // Reset form fields when paymentDetails changes
   useEffect(() => {

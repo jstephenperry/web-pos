@@ -3,7 +3,16 @@
 import React, {FormEvent, useEffect, useState, useCallback, useMemo, memo} from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { Product, type CartItem, ProductCardProps, CartItemProps, FailureReason, PaymentDetails } from "./pos.types";
+import { 
+  Product, 
+  type CartItem, 
+  ProductCardProps, 
+  CartItemProps, 
+  FailureReason, 
+  PaymentDetails,
+  PaymentRequest,
+  PaymentResponse
+} from "./pos.types";
 
 // Dynamically import the CheckoutModal component to reduce initial bundle size
 const CheckoutModal = dynamic(() => import("./CheckoutModal"), {
@@ -277,48 +286,135 @@ export default function POSPage() {
   }, [cart, sortMethod, updateQuantity, removeItem]);
 
   // Handle checkout form submission - memoized to prevent unnecessary re-renders
-  const handleCheckoutSubmit = useCallback((e: FormEvent, paymentDetails: PaymentDetails) => {
+  const handleCheckoutSubmit = useCallback(async (e: FormEvent, paymentDetails: PaymentDetails) => {
     e.preventDefault();
 
     // Close the checkout modal
     setIsCheckoutModalOpen(false);
 
-    // Simulate a 5% transaction failure rate
-    const shouldFail = Math.random() < 0.02;
+    try {
+      // Parse expiration date (MM/YY format) into month and year
+      const expParts = paymentDetails.expDate?.split('/') || [];
+      const expiryMonth = parseInt(expParts[0] || '0', 10);
+      const expiryYear = parseInt(expParts[1] || '0', 10);
 
-    if (shouldFail) {
-      // If transaction fails, randomly select one of the three failure types
-      const failureTypes: FailureReason[] = ['invalid_cvv', 'processor_failure', 'network_error'];
-      const randomFailureType = failureTypes[Math.floor(Math.random() * failureTypes.length)];
+      // Convert legacy PaymentDetails to new PaymentRequest format
+      const paymentRequest: PaymentRequest = {
+        merchantReference: `POS-${Date.now()}`, // Generate a unique reference
+        amount: cartTotal,
+        currencyCode: 'USD',
+        card: {
+          number: paymentDetails.cardNumber?.replace(/\s/g, '') || '',
+          expiryMonth,
+          expiryYear,
+          cvv: paymentDetails.cvv || '',
+          cardholderName: paymentDetails.cardName || '',
+        },
+        description: `POS Purchase - ${cart.length} items`,
+      };
+
+      // Make API call to Spring Boot server with updated endpoint
+      // Use AbortController to set a timeout for the fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      let response;
+      let paymentResponse: PaymentResponse = {};
+
+      try {
+        // Use relative URL to leverage Next.js API route rewriting (avoids CORS issues)
+        response = await fetch('/api/v1/payments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(paymentRequest),
+          signal: controller.signal,
+        });
+
+        // Clear the timeout since the request completed
+        clearTimeout(timeoutId);
+
+        // Parse the response
+        paymentResponse = await response.json().catch(() => ({}));
+      } catch (fetchError) {
+        // Handle specific fetch errors
+        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+          console.error('Request timed out after 10 seconds');
+
+          // Store the payment details for reuse
+          setLastPaymentDetails(paymentDetails);
+
+          // Set network error as failure reason and show the failure modal
+          setFailureReason('network_error');
+          setIsTransactionFailedModalOpen(true);
+          return; // Exit early
+        }
+
+        console.error('Fetch error:', fetchError);
+
+        // Store the payment details for reuse
+        setLastPaymentDetails(paymentDetails);
+
+        // Set network error as failure reason and show the failure modal
+        setFailureReason('network_error');
+        setIsTransactionFailedModalOpen(true);
+        return; // Exit early
+      }
+
+      if (!response || !response.ok || paymentResponse.status === 'DECLINED' || paymentResponse.status === 'ERROR') {
+        // Handle API error response
+        console.error('Payment failed:', paymentResponse.errorMessage || 'Unknown error');
+
+        // Store the payment details for reuse
+        setLastPaymentDetails(paymentDetails);
+
+        // Determine failure reason based on error response or default to network_error
+        let failureType: FailureReason = 'network_error';
+
+        // Map error codes to failure reasons
+        if (paymentResponse.errorCode === 'INVALID_CVV' || paymentResponse.errorMessage?.includes('CVV')) {
+          failureType = 'invalid_cvv';
+        } else if (paymentResponse.errorCode === 'PROCESSOR_FAILURE' || paymentResponse.status === 'ERROR') {
+          failureType = 'processor_failure';
+        }
+
+        // Set the failure reason and show the failure modal
+        setFailureReason(failureType);
+        setIsTransactionFailedModalOpen(true);
+      } else {
+        // If transaction succeeds (AUTHORIZED, CAPTURED, or PENDING), show the success modal and clear the cart
+        console.log('Payment successful:', paymentResponse.transactionId);
+        setIsTransactionCompleteModalOpen(true);
+        setCart([]);
+
+        // Clear the last payment details
+        setLastPaymentDetails(undefined);
+
+        // Reset to default settings after successful checkout
+        try {
+          localStorage.removeItem('posCart');
+          // Reset sort method to sequential (default)
+          setSortMethod("sequential");
+          localStorage.setItem('posSortMethod', 'sequential');
+          // Reset view mode to card (default)
+          setViewMode("card");
+          localStorage.setItem('posViewMode', 'card');
+        } catch (error) {
+          console.error('Error clearing data from localStorage:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing payment:', error);
 
       // Store the payment details for reuse
       setLastPaymentDetails(paymentDetails);
 
-      // Set the failure reason and show the failure modal
-      setFailureReason(randomFailureType);
+      // Set network error as failure reason and show the failure modal
+      setFailureReason('network_error');
       setIsTransactionFailedModalOpen(true);
-    } else {
-      // If transaction succeeds, show the success modal and clear the cart
-      setIsTransactionCompleteModalOpen(true);
-      setCart([]);
-
-      // Clear the last payment details
-      setLastPaymentDetails(undefined);
-
-      // Reset to default settings after successful checkout
-      try {
-        localStorage.removeItem('posCart');
-        // Reset sort method to sequential (default)
-        setSortMethod("sequential");
-        localStorage.setItem('posSortMethod', 'sequential');
-        // Reset view mode to card (default)
-        setViewMode("card");
-        localStorage.setItem('posViewMode', 'card');
-      } catch (error) {
-        console.error('Error clearing data from localStorage:', error);
-      }
     }
-  }, [setIsCheckoutModalOpen, setIsTransactionCompleteModalOpen, setIsTransactionFailedModalOpen, setFailureReason, setLastPaymentDetails, setCart, setSortMethod, setViewMode]);
+  }, [setIsCheckoutModalOpen, setIsTransactionCompleteModalOpen, setIsTransactionFailedModalOpen, setFailureReason, setLastPaymentDetails, setCart, setSortMethod, setViewMode, cart, cartTotal]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-foreground">

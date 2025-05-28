@@ -27,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="no-theme-yet theme-transition">
       <head>
+          <title>WEB POS DEMO</title>
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
