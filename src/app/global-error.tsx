@@ -92,7 +92,7 @@ export default function GlobalError({
                   fontSize: '0.875rem',
                   fontFamily: 'monospace',
                   color: '#991b1b',
-                  wordBreak: 'break-words',
+                  wordBreak: 'break-word',
                 }}>
                   {error.message}
                 </p>
