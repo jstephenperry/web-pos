@@ -16,17 +16,8 @@ const nextConfig = {
   /* Enable production source maps for better debugging */
   productionBrowserSourceMaps: false,
 
-  /* Add a comment explaining CORS configuration needs to be on the backend */
-  // Note: CORS issues need to be resolved on the backend (Spring Boot API)
-  // The following is a temporary workaround for development only
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:8765/api/:path*',
-      },
-    ];
-  },
+  /* Note: Backend API is now implemented in Next.js API routes (/src/app/api)
+   * No external CORS configuration needed for prototype */
 };
 
 module.exports = nextConfig;
