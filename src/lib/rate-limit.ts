@@ -49,8 +49,9 @@ function getClientIdentifier(request: NextRequest): string {
     return realIp;
   }
 
-  // Fallback to connection remote address (may not work in all environments)
-  return request.ip || 'unknown';
+  // Fallback to user-agent or unknown
+  const userAgent = request.headers.get('user-agent');
+  return userAgent || 'unknown';
 }
 
 /**

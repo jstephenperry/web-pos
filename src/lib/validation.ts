@@ -180,9 +180,10 @@ export function validateData<T>(schema: z.ZodSchema<T>, data: unknown): { succes
  */
 export function formatZodError(error: z.ZodError): Record<string, string> {
   const formatted: Record<string, string> = {};
-  error.errors.forEach((err) => {
-    const path = err.path.join('.');
-    formatted[path] = err.message;
+  const issues = error.issues || [];
+  issues.forEach((issue: any) => {
+    const path = issue.path.join('.');
+    formatted[path] = issue.message;
   });
   return formatted;
 }
