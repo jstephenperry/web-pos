@@ -7,9 +7,31 @@ A secure Java-based payment processing and tokenization service built with Sprin
 - **Payment Processing**: Authorize, capture, and refund payments
 - **Tokenization**: Securely tokenize payment card information using AES-256-GCM encryption
 - **PCI DSS Compliant Design**: Sensitive card data is encrypted at rest
+- **OAuth2/Keycloak Integration**: Enterprise-grade authentication and authorization
+- **Docker Support**: Full containerization with docker-compose
 - **Mock Payment Gateway**: Includes a mock gateway for testing (configurable for production gateways)
 - **RESTful API**: Clean REST endpoints for payment and token operations
-- **H2 Database**: In-memory database for development (configurable for PostgreSQL in production)
+- **Multi-Database Support**: H2 for development, PostgreSQL for production
+
+## Quick Start with Docker
+
+The fastest way to get started is using Docker:
+
+```bash
+# Start all services (Payment Service + Keycloak + PostgreSQL)
+docker-compose up -d
+
+# Import Keycloak realm configuration
+# Open http://localhost:8180 → Login (admin/admin) → Import keycloak/payment-realm.json
+
+# Get access token
+./scripts/get-token.sh payment-user password123
+
+# Test the API
+./scripts/test-payment.sh <your-access-token>
+```
+
+📖 **See [DEPLOYMENT.md](DEPLOYMENT.md) for complete Docker deployment guide**
 
 ## Tech Stack
 
@@ -17,9 +39,10 @@ A secure Java-based payment processing and tokenization service built with Sprin
 - **Spring Boot 3.4.1**
 - **Gradle with Kotlin DSL**
 - **Spring Data JPA**
-- **Spring Security**
+- **Spring Security OAuth2** with Keycloak
 - **Google Tink** for encryption
-- **H2/PostgreSQL** database support
+- **Docker & Docker Compose**
+- **PostgreSQL** (production) / **H2** (development)
 
 ## Project Structure
 
@@ -42,12 +65,22 @@ payment-service/
 
 ## Getting Started
 
-### Prerequisites
+### Option 1: Docker (Recommended)
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete instructions.
+
+```bash
+docker-compose up -d
+```
+
+### Option 2: Local Development
+
+#### Prerequisites
 
 - Java 21 or later
 - Gradle 8.x (or use included wrapper)
 
-### Build
+#### Build
 
 ```bash
 ./gradlew build

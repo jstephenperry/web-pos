@@ -29,6 +29,11 @@ spring:
     user:
       name: ${SECURITY_USER:admin}
       password: ${SECURITY_PASSWORD:changeme}
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/payment-realm}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/payment-realm/protocol/openid-connect/certs}
 
 server:
   port: ${SERVER_PORT:8080}
