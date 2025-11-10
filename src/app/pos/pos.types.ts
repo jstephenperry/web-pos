@@ -90,7 +90,7 @@ export interface CheckoutModalProps {
   taxAmount: number;
   cartTotal: number;
   onSubmit: (e: FormEvent, paymentDetails: PaymentDetails) => void;
-  paymentDetails?: PaymentDetails;
+  // Note: Removed paymentDetails prop for security - card data should never be persisted
 }
 
 export interface TransactionCompleteModalProps {

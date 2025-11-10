@@ -164,7 +164,7 @@ export default function POSPage() {
   const [isTransactionFailedModalOpen, setIsTransactionFailedModalOpen] = useState(false);
   const [failureReason, setFailureReason] = useState<FailureReason>('invalid_cvv');
   const [searchQuery, setSearchQuery] = useState("");
-  const [lastPaymentDetails, setLastPaymentDetails] = useState<PaymentDetails | undefined>(undefined);
+  // Note: Removed lastPaymentDetails state for security - card data should never be stored in frontend state
   const [sortMethod, setSortMethod] = useState<"sequential" | "alphabetical">("sequential");
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
@@ -252,8 +252,8 @@ export default function POSPage() {
     setCart(prevCart => prevCart.filter(item => item.id !== id));
   }, []);
 
-  // Tax rate constant
-  const TAX_RATE = 8.25;
+  // Tax rate from environment or default
+  const TAX_RATE = parseFloat(process.env.NEXT_PUBLIC_TAX_RATE || '8.25');
 
   // Calculate cart subtotal - memoized to prevent recalculation on every render
   const cartSubtotal = useMemo(() => 
@@ -302,7 +302,7 @@ export default function POSPage() {
       const paymentRequest: PaymentRequest = {
         merchantReference: `POS-${Date.now()}`, // Generate a unique reference
         amount: cartTotal,
-        currencyCode: 'USD',
+        currencyCode: process.env.NEXT_PUBLIC_CURRENCY || 'USD',
         card: {
           number: paymentDetails.cardNumber?.replace(/\s/g, '') || '',
           expiryMonth,
@@ -342,9 +342,6 @@ export default function POSPage() {
         if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
           console.error('Request timed out after 10 seconds');
 
-          // Store the payment details for reuse
-          setLastPaymentDetails(paymentDetails);
-
           // Set network error as failure reason and show the failure modal
           setFailureReason('network_error');
           setIsTransactionFailedModalOpen(true);
@@ -352,9 +349,6 @@ export default function POSPage() {
         }
 
         console.error('Fetch error:', fetchError);
-
-        // Store the payment details for reuse
-        setLastPaymentDetails(paymentDetails);
 
         // Set network error as failure reason and show the failure modal
         setFailureReason('network_error');
@@ -365,9 +359,6 @@ export default function POSPage() {
       if (!response || !response.ok || paymentResponse.status === 'DECLINED' || paymentResponse.status === 'ERROR') {
         // Handle API error response
         console.error('Payment failed:', paymentResponse.errorMessage || 'Unknown error');
-
-        // Store the payment details for reuse
-        setLastPaymentDetails(paymentDetails);
 
         // Determine failure reason based on error response or default to network_error
         let failureType: FailureReason = 'network_error';
@@ -388,9 +379,6 @@ export default function POSPage() {
         setIsTransactionCompleteModalOpen(true);
         setCart([]);
 
-        // Clear the last payment details
-        setLastPaymentDetails(undefined);
-
         // Reset to default settings after successful checkout
         try {
           localStorage.removeItem('posCart');
@@ -407,14 +395,11 @@ export default function POSPage() {
     } catch (error) {
       console.error('Error processing payment:', error);
 
-      // Store the payment details for reuse
-      setLastPaymentDetails(paymentDetails);
-
       // Set network error as failure reason and show the failure modal
       setFailureReason('network_error');
       setIsTransactionFailedModalOpen(true);
     }
-  }, [setIsCheckoutModalOpen, setIsTransactionCompleteModalOpen, setIsTransactionFailedModalOpen, setFailureReason, setLastPaymentDetails, setCart, setSortMethod, setViewMode, cart, cartTotal]);
+  }, [setIsCheckoutModalOpen, setIsTransactionCompleteModalOpen, setIsTransactionFailedModalOpen, setFailureReason, setCart, setSortMethod, setViewMode, cart, cartTotal]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-foreground">
@@ -610,7 +595,7 @@ export default function POSPage() {
       </main>
 
       {/* Checkout Modal */}
-      <CheckoutModal 
+      <CheckoutModal
         isOpen={isCheckoutModalOpen}
         onClose={() => setIsCheckoutModalOpen(false)}
         cartSubtotal={cartSubtotal}
@@ -618,7 +603,6 @@ export default function POSPage() {
         taxAmount={taxAmount}
         cartTotal={cartTotal}
         onSubmit={handleCheckoutSubmit}
-        paymentDetails={lastPaymentDetails}
       />
 
       {/* Transaction Complete Modal */}
@@ -632,7 +616,7 @@ export default function POSPage() {
         isOpen={isTransactionFailedModalOpen}
         onClose={() => {
           setIsTransactionFailedModalOpen(false);
-          // Reopen the checkout modal with the stored payment details
+          // Reopen the checkout modal to allow user to retry
           setIsCheckoutModalOpen(true);
         }}
         failureReason={failureReason}

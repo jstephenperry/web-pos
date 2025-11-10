@@ -4,7 +4,7 @@ import React, { useState, memo, useEffect, useCallback, useMemo } from 'react';
 import { CheckoutModalProps } from './pos.types';
 
 // Checkout Modal Component
-const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtotal, taxRate, taxAmount, cartTotal, onSubmit, paymentDetails }: CheckoutModalProps) {
+const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtotal, taxRate, taxAmount, cartTotal, onSubmit }: CheckoutModalProps) {
   // Card brand definitions with patterns, max lengths, and CVV lengths
   const cardBrands = useMemo(() => [
     { name: 'visa', pattern: /^4/, maxLength: 16, cvvLength: 3, icon: '💳 V' },
@@ -15,11 +15,11 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
     { name: 'jcb', pattern: /^35/, maxLength: 16, cvvLength: 3, icon: '💳 J' }
   ], []);
 
-  // State for payment details
-  const [cardName, setCardName] = useState<string>(paymentDetails?.cardName || '');
-  const [cardNumber, setCardNumber] = useState<string>(paymentDetails?.cardNumber || '');
-  const [expDate, setExpDate] = useState<string>(paymentDetails?.expDate || '');
-  const [cvv, setCvv] = useState<string>(paymentDetails?.cvv || '');
+  // State for payment details - SECURITY: Form fields cleared on modal close
+  const [cardName, setCardName] = useState<string>('');
+  const [cardNumber, setCardNumber] = useState<string>('');
+  const [expDate, setExpDate] = useState<string>('');
+  const [cvv, setCvv] = useState<string>('');
 
   // State for card brand
   const [cardBrand, setCardBrand] = useState<{ name: string; maxLength: number; cvvLength: number; icon: string } | null>(null);
@@ -41,24 +41,17 @@ const CheckoutModal = memo(function CheckoutModal({ isOpen, onClose, cartSubtota
     return brand;
   }, [cardBrands]);
 
-  // Initialize card brand if cardNumber is provided
+  // Clear form when modal closes for security
   useEffect(() => {
-    if (paymentDetails?.cardNumber) {
-      identifyCardBrand(paymentDetails.cardNumber);
-    }
-  }, [identifyCardBrand, paymentDetails?.cardNumber]);
-
-  // Reset form fields when paymentDetails changes
-  useEffect(() => {
-    setCardName(paymentDetails?.cardName || '');
-    setCardNumber(paymentDetails?.cardNumber || '');
-    setExpDate(paymentDetails?.expDate || '');
-    setCvv(paymentDetails?.cvv || '');
-
-    if (!paymentDetails?.cardNumber) {
+    if (!isOpen) {
+      setCardName('');
+      setCardNumber('');
+      setExpDate('');
+      setCvv('');
       setCardBrand(null);
+      setExpDateError('');
     }
-  }, [paymentDetails]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
