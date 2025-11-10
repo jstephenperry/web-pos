@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { logger } from '@/lib/logger';
 
 export default function Error({
   error,
@@ -10,8 +11,8 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log the error to console and any error reporting service
-    console.error('Application error:', error);
+    // Log the error to structured logger and any error reporting service
+    logger.error('Application error', { digest: error.digest }, error);
 
     // TODO: Send to error tracking service (Sentry, LogRocket, etc.)
     // Example: Sentry.captureException(error);
