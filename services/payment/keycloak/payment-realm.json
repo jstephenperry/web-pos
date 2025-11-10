@@ -1,0 +1,147 @@
+{
+  "realm": "payment-realm",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "payment-user",
+        "description": "User who can process payments and tokenize cards"
+      },
+      {
+        "name": "payment-admin",
+        "description": "Administrator with full payment system access"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "payment-service",
+      "name": "Payment Service",
+      "description": "Backend payment processing service",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "payment-service-secret",
+      "bearerOnly": true,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300"
+      }
+    },
+    {
+      "clientId": "payment-web-app",
+      "name": "Payment Web Application",
+      "description": "Frontend web application for payment processing",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "payment-web-app-secret",
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:8080"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "clientId": "payment-postman",
+      "name": "Payment Postman Testing",
+      "description": "Client for testing with Postman/curl",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "payment-postman-secret",
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "https://oauth.pstmn.io/v1/callback",
+        "http://localhost:*"
+      ],
+      "webOrigins": [
+        "*"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "payment-user",
+      "enabled": true,
+      "email": "user@payment.local",
+      "firstName": "Payment",
+      "lastName": "User",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "payment-user"
+      ]
+    },
+    {
+      "username": "payment-admin",
+      "enabled": true,
+      "email": "admin@payment.local",
+      "firstName": "Payment",
+      "lastName": "Admin",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "payment-admin",
+        "payment-user"
+      ]
+    }
+  ]
+}

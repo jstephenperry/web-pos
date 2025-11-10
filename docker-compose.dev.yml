@@ -1,0 +1,47 @@
+version: '3.8'
+
+# Development overrides for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  payment-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,docker
+      LOG_LEVEL: DEBUG
+      WEB_LOG_LEVEL: DEBUG
+      SECURITY_LOG_LEVEL: DEBUG
+      SHOW_SQL: "true"
+    volumes:
+      # Mount source for hot reload
+      - ./services/payment/src:/app/src
+    ports:
+      - "8080:8080"
+      - "5005:5005"  # Debug port
+    command: >
+      java
+      -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      -Djava.security.egd=file:/dev/./urandom
+      -jar app.jar
+
+  web-frontend:
+    build:
+      context: ./apps/web-frontend
+      dockerfile: Dockerfile.dev
+      target: development
+    environment:
+      NODE_ENV: development
+    volumes:
+      # Hot reload for frontend
+      - ./apps/web-frontend/src:/app/src
+      - ./apps/web-frontend/public:/app/public
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+  keycloak:
+    environment:
+      KC_LOG_LEVEL: debug
+    ports:
+      - "8180:8080"
+      - "8543:8443"
+      - "9990:9990"  # Management port

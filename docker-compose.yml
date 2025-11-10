@@ -1,0 +1,170 @@
+version: '3.8'
+
+# Root-level orchestration for the entire Web POS system
+# This compose file coordinates all services and applications
+
+services:
+  # ============================================================================
+  # Infrastructure Services
+  # ============================================================================
+
+  # PostgreSQL for Payment Service
+  payment-db:
+    image: postgres:16-alpine
+    container_name: webpos-payment-db
+    environment:
+      POSTGRES_DB: paymentdb
+      POSTGRES_USER: paymentuser
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD:-paymentpass}
+    ports:
+      - "${PAYMENT_DB_PORT:-5432}:5432"
+    volumes:
+      - payment-db-data:/var/lib/postgresql/data
+    networks:
+      - webpos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paymentuser -d paymentdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # PostgreSQL for Keycloak
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: webpos-keycloak-db
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloakpass}
+    ports:
+      - "${KEYCLOAK_DB_PORT:-5433}:5432"
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    networks:
+      - webpos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Keycloak Identity Provider
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: webpos-keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloakpass}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:-localhost}
+      KC_HOSTNAME_PORT: ${KEYCLOAK_PORT:-8180}
+      KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_LOG_LEVEL: ${KEYCLOAK_LOG_LEVEL:-info}
+      KC_METRICS_ENABLED: true
+      KC_HEALTH_ENABLED: true
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    command: start-dev
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+      - "${KEYCLOAK_HTTPS_PORT:-8543}:8443"
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    networks:
+      - webpos-network
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;grep 'HTTP/1.1 200 OK' <&3"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  # ============================================================================
+  # Backend Services
+  # ============================================================================
+
+  # Payment Service (Java Spring Boot)
+  payment-service:
+    build:
+      context: ./services/payment
+      dockerfile: Dockerfile
+    container_name: webpos-payment-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${PAYMENT_PROFILE:-docker}
+      DATABASE_URL: jdbc:postgresql://payment-db:5432/paymentdb
+      DATABASE_USERNAME: paymentuser
+      DATABASE_PASSWORD: ${PAYMENT_DB_PASSWORD:-paymentpass}
+      DATABASE_DRIVER: org.postgresql.Driver
+      HIBERNATE_DDL_AUTO: update
+      HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/payment-realm
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/payment-realm/protocol/openid-connect/certs
+      KEYCLOAK_AUTH_SERVER_URL: http://localhost:${KEYCLOAK_PORT:-8180}
+      SERVER_PORT: 8080
+      LOG_LEVEL: ${PAYMENT_LOG_LEVEL:-INFO}
+    ports:
+      - "${PAYMENT_SERVICE_PORT:-8080}:8080"
+    depends_on:
+      payment-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - webpos-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  # ============================================================================
+  # Frontend Applications
+  # ============================================================================
+
+  # Web Frontend (Next.js)
+  web-frontend:
+    build:
+      context: ./apps/web-frontend
+      dockerfile: Dockerfile
+    container_name: webpos-web-frontend
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api}
+      NEXT_PUBLIC_KEYCLOAK_URL: ${NEXT_PUBLIC_KEYCLOAK_URL:-http://localhost:8180}
+      NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:-payment-realm}
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-payment-web-app}
+    ports:
+      - "${WEB_FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - payment-service
+      - keycloak
+    networks:
+      - webpos-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  payment-db-data:
+    name: webpos-payment-db-data
+    driver: local
+  keycloak-db-data:
+    name: webpos-keycloak-db-data
+    driver: local
+
+networks:
+  webpos-network:
+    name: webpos-network
+    driver: bridge
