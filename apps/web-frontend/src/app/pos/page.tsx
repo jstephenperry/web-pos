@@ -3,12 +3,13 @@
 import React, {FormEvent, useEffect, useState, useCallback, useMemo, memo} from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { 
-  Product, 
-  type CartItem, 
-  ProductCardProps, 
-  CartItemProps, 
-  FailureReason, 
+import { logger } from "@/lib/logger";
+import {
+  Product,
+  type CartItem,
+  ProductCardProps,
+  CartItemProps,
+  FailureReason,
   PaymentDetails,
   PaymentRequest,
   PaymentResponse
@@ -83,9 +84,10 @@ const ProductCard = memo(function ProductCard({ product, onAddToCart, viewMode =
             <p className="text-gray-600 dark:text-gray-300">${product.price.toFixed(2)}</p>
           </div>
         </div>
-        <button 
+        <button
           onClick={() => onAddToCart(product)}
           className="bg-button-primary-background hover:bg-button-primary-background/90 active:bg-button-primary-background/70 text-button-primary-foreground py-3 px-5 rounded-md transition-colors text-base font-medium"
+          aria-label={`Add ${product.name} to cart for $${product.price.toFixed(2)}`}
         >
           Add to Cart
         </button>
@@ -111,9 +113,10 @@ const ProductCard = memo(function ProductCard({ product, onAddToCart, viewMode =
       </div>
       <h3 className="font-semibold text-lg">{product.name}</h3>
       <p className="text-gray-600 dark:text-gray-300 mb-2">${product.price.toFixed(2)}</p>
-      <button 
+      <button
         onClick={() => onAddToCart(product)}
         className="mt-auto bg-button-primary-background hover:bg-button-primary-background/90 active:bg-button-primary-background/70 text-button-primary-foreground py-3 px-5 rounded-md transition-colors text-base font-medium"
+        aria-label={`Add ${product.name} to cart for $${product.price.toFixed(2)}`}
       >
         Add to Cart
       </button>
@@ -130,23 +133,26 @@ const CartItem = memo(function CartItem({ item, onUpdateQuantity, onRemove }: Ca
         <p className="text-sm text-gray-600 dark:text-gray-400">${item.price.toFixed(2)} each</p>
       </div>
       <div className="flex items-center gap-2">
-        <button 
+        <button
           onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
           className="w-10 h-10 flex items-center justify-center bg-button-secondary-background hover:bg-button-secondary-background/90 active:bg-button-secondary-background/70 text-button-secondary-foreground rounded-md text-xl font-bold"
           disabled={item.quantity <= 1}
+          aria-label={`Decrease quantity of ${item.name}`}
         >
           -
         </button>
-        <span className="w-10 text-center text-lg">{item.quantity}</span>
-        <button 
+        <span className="w-10 text-center text-lg" aria-label={`Quantity: ${item.quantity}`}>{item.quantity}</span>
+        <button
           onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
           className="w-10 h-10 flex items-center justify-center bg-button-secondary-background hover:bg-button-secondary-background/90 active:bg-button-secondary-background/70 text-button-secondary-foreground rounded-md text-xl font-bold"
+          aria-label={`Increase quantity of ${item.name}`}
         >
           +
         </button>
-        <button 
+        <button
           onClick={() => onRemove(item.id)}
           className="ml-3 w-10 h-10 flex items-center justify-center text-red-500 hover:text-red-700 active:text-red-300 dark:text-red-400 dark:hover:text-red-300 text-xl font-bold"
+          aria-label={`Remove ${item.name} from cart`}
         >
           ×
         </button>
@@ -164,7 +170,7 @@ export default function POSPage() {
   const [isTransactionFailedModalOpen, setIsTransactionFailedModalOpen] = useState(false);
   const [failureReason, setFailureReason] = useState<FailureReason>('invalid_cvv');
   const [searchQuery, setSearchQuery] = useState("");
-  const [lastPaymentDetails, setLastPaymentDetails] = useState<PaymentDetails | undefined>(undefined);
+  // Note: Removed lastPaymentDetails state for security - card data should never be stored in frontend state
   const [sortMethod, setSortMethod] = useState<"sequential" | "alphabetical">("sequential");
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
@@ -186,7 +192,7 @@ export default function POSPage() {
         setViewMode(savedViewMode as "card" | "list");
       }
     } catch (error) {
-      console.error('Error loading data from localStorage:', error);
+      logger.error('Error loading data from localStorage', {}, error as Error);
     }
   }, []);
 
@@ -195,7 +201,7 @@ export default function POSPage() {
     try {
       localStorage.setItem('posCart', JSON.stringify(cart));
     } catch (error) {
-      console.error('Error saving cart to localStorage:', error);
+      logger.error('Error saving cart to localStorage', {}, error as Error);
     }
   }, [cart]);
 
@@ -204,7 +210,7 @@ export default function POSPage() {
     try {
       localStorage.setItem('posSortMethod', sortMethod);
     } catch (error) {
-      console.error('Error saving sort method to localStorage:', error);
+      logger.error('Error saving sort method to localStorage', {}, error as Error);
     }
   }, [sortMethod]);
 
@@ -213,7 +219,7 @@ export default function POSPage() {
     try {
       localStorage.setItem('posViewMode', viewMode);
     } catch (error) {
-      console.error('Error saving view mode to localStorage:', error);
+      logger.error('Error saving view mode to localStorage', {}, error as Error);
     }
   }, [viewMode]);
 
@@ -252,8 +258,8 @@ export default function POSPage() {
     setCart(prevCart => prevCart.filter(item => item.id !== id));
   }, []);
 
-  // Tax rate constant
-  const TAX_RATE = 8.25;
+  // Tax rate from environment or default
+  const TAX_RATE = parseFloat(process.env.NEXT_PUBLIC_TAX_RATE || '8.25');
 
   // Calculate cart subtotal - memoized to prevent recalculation on every render
   const cartSubtotal = useMemo(() => 
@@ -302,7 +308,7 @@ export default function POSPage() {
       const paymentRequest: PaymentRequest = {
         merchantReference: `POS-${Date.now()}`, // Generate a unique reference
         amount: cartTotal,
-        currencyCode: 'USD',
+        currencyCode: process.env.NEXT_PUBLIC_CURRENCY || 'USD',
         card: {
           number: paymentDetails.cardNumber?.replace(/\s/g, '') || '',
           expiryMonth,
@@ -340,10 +346,7 @@ export default function POSPage() {
       } catch (fetchError) {
         // Handle specific fetch errors
         if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
-          console.error('Request timed out after 10 seconds');
-
-          // Store the payment details for reuse
-          setLastPaymentDetails(paymentDetails);
+          logger.warn('Payment request timed out', { timeout: 10000 });
 
           // Set network error as failure reason and show the failure modal
           setFailureReason('network_error');
@@ -351,10 +354,7 @@ export default function POSPage() {
           return; // Exit early
         }
 
-        console.error('Fetch error:', fetchError);
-
-        // Store the payment details for reuse
-        setLastPaymentDetails(paymentDetails);
+        logger.error('Payment fetch error', {}, fetchError as Error);
 
         // Set network error as failure reason and show the failure modal
         setFailureReason('network_error');
@@ -364,10 +364,11 @@ export default function POSPage() {
 
       if (!response || !response.ok || paymentResponse.status === 'DECLINED' || paymentResponse.status === 'ERROR') {
         // Handle API error response
-        console.error('Payment failed:', paymentResponse.errorMessage || 'Unknown error');
-
-        // Store the payment details for reuse
-        setLastPaymentDetails(paymentDetails);
+        logger.payment('failed', {
+          errorCode: paymentResponse.errorCode,
+          errorMessage: paymentResponse.errorMessage,
+          status: paymentResponse.status,
+        });
 
         // Determine failure reason based on error response or default to network_error
         let failureType: FailureReason = 'network_error';
@@ -384,12 +385,13 @@ export default function POSPage() {
         setIsTransactionFailedModalOpen(true);
       } else {
         // If transaction succeeds (AUTHORIZED, CAPTURED, or PENDING), show the success modal and clear the cart
-        console.log('Payment successful:', paymentResponse.transactionId);
+        logger.payment('success', {
+          transactionId: paymentResponse.transactionId,
+          amount: paymentResponse.amount,
+          status: paymentResponse.status,
+        });
         setIsTransactionCompleteModalOpen(true);
         setCart([]);
-
-        // Clear the last payment details
-        setLastPaymentDetails(undefined);
 
         // Reset to default settings after successful checkout
         try {
@@ -401,20 +403,17 @@ export default function POSPage() {
           setViewMode("card");
           localStorage.setItem('posViewMode', 'card');
         } catch (error) {
-          console.error('Error clearing data from localStorage:', error);
+          logger.error('Error clearing data from localStorage', {}, error as Error);
         }
       }
     } catch (error) {
-      console.error('Error processing payment:', error);
-
-      // Store the payment details for reuse
-      setLastPaymentDetails(paymentDetails);
+      logger.error('Error processing payment', {}, error as Error);
 
       // Set network error as failure reason and show the failure modal
       setFailureReason('network_error');
       setIsTransactionFailedModalOpen(true);
     }
-  }, [setIsCheckoutModalOpen, setIsTransactionCompleteModalOpen, setIsTransactionFailedModalOpen, setFailureReason, setLastPaymentDetails, setCart, setSortMethod, setViewMode, cart, cartTotal]);
+  }, [setIsCheckoutModalOpen, setIsTransactionCompleteModalOpen, setIsTransactionFailedModalOpen, setFailureReason, setCart, setSortMethod, setViewMode, cart, cartTotal]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-foreground">
@@ -476,6 +475,8 @@ export default function POSPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full p-3 pl-10 pr-10 border border-input-border bg-input-background text-input-foreground rounded-md text-base"
+                  aria-label="Search products"
+                  role="searchbox"
                 />
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -562,6 +563,8 @@ export default function POSPage() {
                           ? "bg-button-primary-background text-button-primary-foreground"
                           : "bg-button-secondary-background text-button-secondary-foreground"
                       } hover:opacity-90 active:opacity-70 transition-opacity`}
+                      aria-label="Sort cart items by order added"
+                      aria-pressed={sortMethod === "sequential"}
                     >
                       Sequential
                     </button>
@@ -572,6 +575,8 @@ export default function POSPage() {
                           ? "bg-button-primary-background text-button-primary-foreground"
                           : "bg-button-secondary-background text-button-secondary-foreground"
                       } hover:opacity-90 active:opacity-70 transition-opacity`}
+                      aria-label="Sort cart items alphabetically"
+                      aria-pressed={sortMethod === "alphabetical"}
                     >
                       Alphabetical
                     </button>
@@ -596,9 +601,10 @@ export default function POSPage() {
                     <span>${cartTotal.toFixed(2)}</span>
                   </div>
 
-                  <button 
+                  <button
                     onClick={() => setIsCheckoutModalOpen(true)}
                     className="w-full bg-button-primary-background hover:bg-button-primary-background/90 active:bg-button-primary-background/70 text-button-primary-foreground py-4 px-6 rounded-md transition-colors text-lg font-medium"
+                    aria-label={`Proceed to checkout with ${cart.length} items totaling $${cartTotal.toFixed(2)}`}
                   >
                     Checkout
                   </button>
@@ -610,7 +616,7 @@ export default function POSPage() {
       </main>
 
       {/* Checkout Modal */}
-      <CheckoutModal 
+      <CheckoutModal
         isOpen={isCheckoutModalOpen}
         onClose={() => setIsCheckoutModalOpen(false)}
         cartSubtotal={cartSubtotal}
@@ -618,7 +624,6 @@ export default function POSPage() {
         taxAmount={taxAmount}
         cartTotal={cartTotal}
         onSubmit={handleCheckoutSubmit}
-        paymentDetails={lastPaymentDetails}
       />
 
       {/* Transaction Complete Modal */}
@@ -632,7 +637,7 @@ export default function POSPage() {
         isOpen={isTransactionFailedModalOpen}
         onClose={() => {
           setIsTransactionFailedModalOpen(false);
-          // Reopen the checkout modal with the stored payment details
+          // Reopen the checkout modal to allow user to retry
           setIsCheckoutModalOpen(true);
         }}
         failureReason={failureReason}

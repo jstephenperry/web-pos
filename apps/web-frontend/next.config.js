@@ -24,16 +24,21 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
 
   /* API proxy configuration */
-  // Note: CORS issues should be resolved on the backend (Spring Boot API)
-  // This is a proxy for development convenience
+  // Note: Both Next.js API routes (for mock/prototype) and external Spring Boot service supported
+  // API routes in /src/app/api provide mock endpoints for development
+  // For production, proxy can route to external payment service
   async rewrites() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${apiUrl}/:path*`,
-      },
-    ];
+    // Only proxy external API if environment variable is set
+    if (process.env.USE_EXTERNAL_API === 'true') {
+      return [
+        {
+          source: '/api/external/:path*',
+          destination: `${apiUrl}/:path*`,
+        },
+      ];
+    }
+    return [];
   },
 };
 
