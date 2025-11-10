@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { paymentRequestSchema, validateData, formatZodError } from '@/lib/validation';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rate-limit';
 import type { PaymentRequest, PaymentResponse } from '@/app/pos/pos.types';
+
+// Request size limit (1MB for payment requests)
+const MAX_REQUEST_SIZE = 1024 * 1024; // 1MB
 
 /**
  * POST /api/v1/payments
@@ -12,7 +16,35 @@ import type { PaymentRequest, PaymentResponse } from '@/app/pos/pos.types';
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
+  // Rate limiting check
+  const rateLimitResult = rateLimit(request, {
+    maxRequests: 10, // 10 requests
+    windowMs: 60 * 1000, // per minute (stricter for payment endpoints)
+  });
+
+  if (rateLimitResult) {
+    return rateLimitResult;
+  }
+
   try {
+    // Check content length
+    const contentLength = request.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > MAX_REQUEST_SIZE) {
+      logger.warn('Request payload too large', {
+        size: contentLength,
+        limit: MAX_REQUEST_SIZE,
+      });
+
+      return NextResponse.json(
+        {
+          status: 'ERROR',
+          errorCode: 'PAYLOAD_TOO_LARGE',
+          errorMessage: 'Request payload exceeds maximum size limit',
+        } as PaymentResponse,
+        { status: 413 }
+      );
+    }
+
     // Parse request body
     const body = await request.json();
 
@@ -74,7 +106,18 @@ export async function POST(request: NextRequest) {
         ? 402
         : 500;
 
-    return NextResponse.json(mockResult, { status: statusCode });
+    // Add rate limit headers to response
+    const headers = getRateLimitHeaders(request, {
+      maxRequests: 10,
+      windowMs: 60 * 1000,
+    });
+
+    // Add CORS headers
+    headers['Access-Control-Allow-Origin'] = process.env.NEXT_PUBLIC_API_URL || '*';
+    headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+
+    return NextResponse.json(mockResult, { status: statusCode, headers });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
@@ -211,6 +254,23 @@ function getCardBrand(cardNumber: string): string {
   if (/^35/.test(number)) return 'JCB';
 
   return 'Unknown';
+}
+
+/**
+ * OPTIONS /api/v1/payments
+ *
+ * CORS preflight request handler
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_API_URL || '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400', // 24 hours
+    },
+  });
 }
 
 /**

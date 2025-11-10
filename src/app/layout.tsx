@@ -20,15 +20,37 @@ export const metadata: Metadata = {
   keywords: ["pos", "point of sale", "payment", "retail", "e-commerce", "checkout"],
   authors: [{ name: "Web POS Team" }],
   robots: "index, follow",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+  },
+  manifest: "/manifest.json",
   openGraph: {
     title: "Web POS - Point of Sale System",
     description: "Modern web-based point of sale system for retail and service businesses",
     type: "website",
     locale: "en_US",
+    siteName: "Web POS",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Web POS - Point of Sale System",
+    description: "Modern web-based point of sale system for retail and service businesses. Fast, secure, and easy to use.",
+    creator: "@webpos",
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Web POS",
   },
 };
 
@@ -39,9 +61,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="no-theme-yet theme-transition">
-      <head>
-          <title>WEB POS DEMO</title>
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

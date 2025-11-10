@@ -23,6 +23,26 @@ export async function GET() {
     status: 200,
     headers: {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_API_URL || '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
+/**
+ * OPTIONS /api/health
+ *
+ * CORS preflight request handler
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_API_URL || '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400', // 24 hours
     },
   });
 }
