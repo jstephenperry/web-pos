@@ -1,0 +1,25 @@
+spring:
+  h2:
+    console:
+      enabled: true
+
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: true
+
+logging:
+  level:
+    dev.jstephenperry.webpos: DEBUG
+    org.springframework.web: DEBUG
+
+payment:
+  processor:
+    mock-mode: true
