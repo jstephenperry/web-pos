@@ -1,0 +1,47 @@
+version: '3.8'
+
+# Development override for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  payment-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,docker
+      LOG_LEVEL: DEBUG
+      WEB_LOG_LEVEL: DEBUG
+      SECURITY_LOG_LEVEL: DEBUG
+      SHOW_SQL: "true"
+      H2_CONSOLE_ENABLED: "false"
+    volumes:
+      # Mount source for hot reload (if using spring-boot-devtools)
+      - ./src:/app/src
+    ports:
+      - "8080:8080"
+      - "5005:5005"  # Debug port
+    command: >
+      java
+      -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+      -Djava.security.egd=file:/dev/./urandom
+      -jar app.jar
+
+  keycloak:
+    environment:
+      KC_LOG_LEVEL: debug
+    ports:
+      - "8180:8080"
+      - "8543:8443"
+      - "9990:9990"  # Management port
+
+  payment-db:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: paymentdb
+      POSTGRES_USER: paymentuser
+      POSTGRES_PASSWORD: paymentpass
+    # Expose for local development tools
+    volumes:
+      - payment-db-data-dev:/var/lib/postgresql/data
+
+volumes:
+  payment-db-data-dev:
