@@ -263,8 +263,54 @@ cd apps/web-frontend
 npm test
 ```
 
+## 💳 Payment Provider Architecture
+
+This POS system features a **provider-agnostic payment middleware** layer that supports:
+
+- **Multiple Payment Processors**: Stripe, Square, Authorize.net, and more
+- **Multi-Tenancy**: Different tenants can use different payment providers
+- **White-Labeling**: Tenant-specific branding and configuration
+- **Automatic Fallback**: Seamlessly switch to backup provider if primary fails
+- **Type-Safe**: Full TypeScript support with comprehensive interfaces
+
+### Quick Example
+
+```typescript
+import { getCurrentProvider } from '@/lib/payment-providers/initialize';
+
+// Get provider (automatically resolves based on tenant)
+const provider = await getCurrentProvider();
+
+// Process payment with any provider
+const response = await provider.processPayment({
+  amount: 29.99,
+  currency: 'USD',
+  paymentMethod: PaymentMethodType.CARD,
+  card: cardDetails,
+});
+```
+
+### Supported Providers
+
+- ✅ **Mock Provider** - Built-in testing provider
+- 🔧 **Stripe** - Ready for integration (install SDK)
+- 🔧 **Square** - Ready for integration (install SDK)
+- 📋 **Authorize.net, Braintree, Adyen** - Template included
+- 🔌 **Custom** - Easy to add new providers
+
+### Architecture Benefits
+
+1. **Switch providers without code changes** - Change configuration, not code
+2. **Test with mock provider** - No external dependencies during development
+3. **Support multiple tenants** - Each with different providers and branding
+4. **Production-ready** - Health checks, fallbacks, error handling
+5. **Future-proof** - Easy to integrate with your other SMB projects
+
+**📖 See [PAYMENT_PROVIDER_GUIDE.md](PAYMENT_PROVIDER_GUIDE.md) for complete documentation.**
+
 ## 📚 Documentation
 
+- **[Payment Provider Guide](PAYMENT_PROVIDER_GUIDE.md)** - Provider integration and multi-tenancy
 - **[Security Guide](SECURITY.md)** - Comprehensive security documentation
 - [Payment Service Documentation](services/payment/README.md)
 - [Payment Service Deployment Guide](services/payment/DEPLOYMENT.md)
