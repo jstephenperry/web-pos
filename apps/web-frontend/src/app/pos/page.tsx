@@ -4,6 +4,7 @@ import React, {FormEvent, useEffect, useState, useCallback, useMemo, memo} from 
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { logger } from "@/lib/logger";
+import { getSecureItem, setSecureItem, removeSecureItem } from "@/lib/secure-storage";
 import {
   Product,
   type CartItem,
@@ -174,34 +175,59 @@ export default function POSPage() {
   const [sortMethod, setSortMethod] = useState<"sequential" | "alphabetical">("sequential");
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
+  // Store last successful transaction data for receipt generation (no sensitive card data)
+  const [lastTransaction, setLastTransaction] = useState<{
+    transactionId: string;
+    amount: number;
+    last4?: string;
+    cardBrand?: string;
+    authorizationCode?: string;
+    cartItems: CartItem[];
+    subtotal: number;
+    tax: number;
+  } | null>(null);
+
   // Load cart and settings from localStorage only on the client side after initial render
   useEffect(() => {
-    try {
-      const savedCart = localStorage.getItem('posCart');
-      if (savedCart) {
-        setCart(JSON.parse(savedCart));
-      }
+    async function loadData() {
+      try {
+        // Load encrypted cart data
+        const savedCart = await getSecureItem<CartItem[]>('posCart');
+        if (savedCart) {
+          setCart(savedCart);
+        }
 
-      const savedSortMethod = localStorage.getItem('posSortMethod');
-      if (savedSortMethod && (savedSortMethod === 'sequential' || savedSortMethod === 'alphabetical')) {
-        setSortMethod(savedSortMethod as "sequential" | "alphabetical");
-      }
+        // Non-sensitive settings can use regular localStorage
+        const savedSortMethod = localStorage.getItem('posSortMethod');
+        if (savedSortMethod && (savedSortMethod === 'sequential' || savedSortMethod === 'alphabetical')) {
+          setSortMethod(savedSortMethod as "sequential" | "alphabetical");
+        }
 
-      const savedViewMode = localStorage.getItem('posViewMode');
-      if (savedViewMode && (savedViewMode === 'card' || savedViewMode === 'list')) {
-        setViewMode(savedViewMode as "card" | "list");
+        const savedViewMode = localStorage.getItem('posViewMode');
+        if (savedViewMode && (savedViewMode === 'card' || savedViewMode === 'list')) {
+          setViewMode(savedViewMode as "card" | "list");
+        }
+      } catch (error) {
+        logger.error('Error loading data from storage', {}, error as Error);
       }
-    } catch (error) {
-      logger.error('Error loading data from localStorage', {}, error as Error);
     }
+
+    loadData();
   }, []);
 
-  // Save cart to localStorage whenever it changes
+  // Save cart to secure storage whenever it changes
   useEffect(() => {
-    try {
-      localStorage.setItem('posCart', JSON.stringify(cart));
-    } catch (error) {
-      logger.error('Error saving cart to localStorage', {}, error as Error);
+    async function saveCart() {
+      try {
+        await setSecureItem('posCart', cart);
+      } catch (error) {
+        logger.error('Error saving cart to secure storage', {}, error as Error);
+      }
+    }
+
+    // Only save if cart has items or if we need to clear it
+    if (cart.length > 0 || cart.length === 0) {
+      saveCart();
     }
   }, [cart]);
 
@@ -390,12 +416,27 @@ export default function POSPage() {
           amount: paymentResponse.amount,
           status: paymentResponse.status,
         });
+
+        // Save transaction data for receipt generation (before clearing cart)
+        if (paymentResponse.transactionId) {
+          setLastTransaction({
+            transactionId: paymentResponse.transactionId,
+            amount: paymentResponse.amount || cartTotal,
+            last4: paymentResponse.last4,
+            cardBrand: paymentResponse.cardBrand,
+            authorizationCode: paymentResponse.authorizationCode,
+            cartItems: [...cart], // Clone cart before it's cleared
+            subtotal: cartSubtotal,
+            tax: taxAmount,
+          });
+        }
+
         setIsTransactionCompleteModalOpen(true);
         setCart([]);
 
         // Reset to default settings after successful checkout
         try {
-          localStorage.removeItem('posCart');
+          removeSecureItem('posCart');
           // Reset sort method to sequential (default)
           setSortMethod("sequential");
           localStorage.setItem('posSortMethod', 'sequential');
@@ -630,6 +671,14 @@ export default function POSPage() {
       <TransactionCompleteModal
         isOpen={isTransactionCompleteModalOpen}
         onClose={() => setIsTransactionCompleteModalOpen(false)}
+        transactionId={lastTransaction?.transactionId}
+        amount={lastTransaction?.amount}
+        last4={lastTransaction?.last4}
+        cardBrand={lastTransaction?.cardBrand}
+        authorizationCode={lastTransaction?.authorizationCode}
+        cartItems={lastTransaction?.cartItems}
+        subtotal={lastTransaction?.subtotal}
+        tax={lastTransaction?.tax}
       />
 
       {/* Transaction Failed Modal */}

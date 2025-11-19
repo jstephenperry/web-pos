@@ -8,6 +8,39 @@ import type { PaymentRequest, PaymentResponse } from '@/app/pos/pos.types';
 const MAX_REQUEST_SIZE = 1024 * 1024; // 1MB
 
 /**
+ * Get secure CORS headers based on request origin
+ * Never uses wildcard (*) - only allows explicitly configured origins
+ */
+function getCorsHeaders(request: NextRequest): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400', // 24 hours
+    'Vary': 'Origin', // Important for caching
+  };
+
+  const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
+  const origin = request.headers.get('origin');
+
+  // In development with no configured origins, allow localhost/127.0.0.1
+  if (process.env.NODE_ENV === 'development' && allowedOrigins.length === 0) {
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      return headers;
+    }
+  }
+
+  // Check if origin is in allowed list
+  if (origin && allowedOrigins.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+  // If no matching origin, don't set Access-Control-Allow-Origin header
+  // Browser will block the request due to CORS policy
+
+  return headers;
+}
+
+/**
  * POST /api/v1/payments
  *
  * Process a payment transaction
@@ -74,11 +107,38 @@ export async function POST(request: NextRequest) {
 
     const paymentRequest: PaymentRequest = validation.data;
 
+    // Check if mock payments are enabled
+    const enableMockPayments = process.env.ENABLE_MOCK_PAYMENTS === 'true';
+
+    // In production, mock payments should be disabled
+    if (process.env.NODE_ENV === 'production' && enableMockPayments) {
+      logger.error('Mock payments are enabled in production environment!', {
+        environment: process.env.NODE_ENV,
+      });
+    }
+
+    // If mock payments are disabled, return error indicating integration needed
+    if (!enableMockPayments) {
+      logger.warn('Payment attempt with mock payments disabled', {
+        merchantReference: paymentRequest.merchantReference,
+        amount: paymentRequest.amount,
+      });
+
+      return NextResponse.json(
+        {
+          status: 'ERROR',
+          errorCode: 'SERVICE_UNAVAILABLE',
+          errorMessage: 'Payment processing is currently unavailable. Please contact support.',
+        } as PaymentResponse,
+        { status: 503 }
+      );
+    }
+
     // Simulate payment processing delay (100-500ms)
     const processingDelay = Math.floor(Math.random() * 400) + 100;
     await new Promise((resolve) => setTimeout(resolve, processingDelay));
 
-    // Mock payment processing logic
+    // Mock payment processing logic (only when enabled)
     const mockResult = await processMockPayment(paymentRequest);
 
     // Log payment result
@@ -112,10 +172,9 @@ export async function POST(request: NextRequest) {
       windowMs: 60 * 1000,
     });
 
-    // Add CORS headers
-    headers['Access-Control-Allow-Origin'] = process.env.NEXT_PUBLIC_API_URL || '*';
-    headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+    // Add secure CORS headers
+    const corsHeaders = getCorsHeaders(request);
+    Object.assign(headers, corsHeaders);
 
     return NextResponse.json(mockResult, { status: statusCode, headers });
   } catch (error) {
@@ -261,15 +320,12 @@ function getCardBrand(cardNumber: string): string {
  *
  * CORS preflight request handler
  */
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
+  const headers = getCorsHeaders(request);
+
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_API_URL || '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400', // 24 hours
-    },
+    headers,
   });
 }
 

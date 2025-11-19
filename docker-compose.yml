@@ -15,7 +15,7 @@ services:
     environment:
       POSTGRES_DB: paymentdb
       POSTGRES_USER: paymentuser
-      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD:-paymentpass}
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD:?PAYMENT_DB_PASSWORD environment variable is required}
     ports:
       - "${PAYMENT_DB_PORT:-5432}:5432"
     volumes:
@@ -36,7 +36,7 @@ services:
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloakpass}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD environment variable is required}
     ports:
       - "${KEYCLOAK_DB_PORT:-5433}:5432"
     volumes:
@@ -58,7 +58,7 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
       KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloakpass}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD environment variable is required}
       KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:-localhost}
       KC_HOSTNAME_PORT: ${KEYCLOAK_PORT:-8180}
       KC_HOSTNAME_STRICT: false
@@ -66,8 +66,8 @@ services:
       KC_LOG_LEVEL: ${KEYCLOAK_LOG_LEVEL:-info}
       KC_METRICS_ENABLED: true
       KC_HEALTH_ENABLED: true
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:?KEYCLOAK_ADMIN_USER environment variable is required}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD environment variable is required}
     command: start-dev
     ports:
       - "${KEYCLOAK_PORT:-8180}:8080"
@@ -99,7 +99,7 @@ services:
       SPRING_PROFILES_ACTIVE: ${PAYMENT_PROFILE:-docker}
       DATABASE_URL: jdbc:postgresql://payment-db:5432/paymentdb
       DATABASE_USERNAME: paymentuser
-      DATABASE_PASSWORD: ${PAYMENT_DB_PASSWORD:-paymentpass}
+      DATABASE_PASSWORD: ${PAYMENT_DB_PASSWORD:?PAYMENT_DB_PASSWORD environment variable is required}
       DATABASE_DRIVER: org.postgresql.Driver
       HIBERNATE_DDL_AUTO: update
       HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect

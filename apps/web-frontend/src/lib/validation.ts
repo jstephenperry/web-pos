@@ -75,13 +75,27 @@ export const expirationDateSchema = z
 
 /**
  * Cardholder Name Validation
+ * Enhanced with stricter length limits and sanitization
  */
 export const cardholderNameSchema = z
   .string()
   .min(1, 'Cardholder name is required')
   .min(2, 'Cardholder name must be at least 2 characters')
-  .max(100, 'Cardholder name is too long')
-  .regex(/^[a-zA-Z\s'-]+$/, 'Cardholder name contains invalid characters');
+  .max(50, 'Cardholder name must not exceed 50 characters')
+  .regex(/^[a-zA-Z\s'-]+$/, 'Cardholder name contains invalid characters')
+  .refine(
+    (val) => {
+      // Prevent excessive spaces or special characters
+      const normalizedSpaces = val.replace(/\s+/g, ' ').trim();
+      return normalizedSpaces.length >= 2 && normalizedSpaces.length <= 50;
+    },
+    'Cardholder name format is invalid'
+  )
+  .refine(
+    (val) => !val.includes('  '), // No double spaces
+    'Cardholder name contains excessive spaces'
+  )
+  .transform((val) => val.trim().replace(/\s+/g, ' ')); // Normalize spaces
 
 /**
  * Payment Details Schema (Frontend Form)
@@ -95,19 +109,35 @@ export const paymentDetailsSchema = z.object({
 
 /**
  * Product Schema
+ * Enhanced with size and range validation
  */
 export const productSchema = z.object({
   id: z.number().int().positive(),
-  name: z.string().min(1, 'Product name is required'),
-  price: z.number().positive('Price must be positive'),
-  image: z.string().url('Image must be a valid URL').or(z.string().startsWith('/')),
+  name: z.string()
+    .min(1, 'Product name is required')
+    .max(100, 'Product name too long')
+    .trim(),
+  price: z.number()
+    .positive('Price must be positive')
+    .min(0.01, 'Price must be at least 0.01')
+    .max(99999.99, 'Price exceeds maximum limit'),
+  image: z.string()
+    .max(500, 'Image URL too long')
+    .refine(
+      (val) => val.startsWith('/') || val.startsWith('http://') || val.startsWith('https://'),
+      'Image must be a valid URL or path'
+    ),
 });
 
 /**
  * Cart Item Schema
+ * Enhanced with quantity limits
  */
 export const cartItemSchema = productSchema.extend({
-  quantity: z.number().int().positive('Quantity must be at least 1'),
+  quantity: z.number()
+    .int('Quantity must be a whole number')
+    .positive('Quantity must be at least 1')
+    .max(9999, 'Quantity exceeds maximum limit'),
 });
 
 /**
@@ -117,11 +147,28 @@ export const cartSchema = z.array(cartItemSchema);
 
 /**
  * Payment Request Schema (API)
+ * Enhanced with stricter amount validation and size limits
  */
 export const paymentRequestSchema = z.object({
-  merchantReference: z.string().optional(),
-  amount: z.number().positive('Amount must be positive'),
-  currencyCode: z.string().length(3, 'Currency code must be 3 characters').default('USD'),
+  merchantReference: z.string()
+    .max(100, 'Merchant reference too long')
+    .optional(),
+  amount: z.number()
+    .positive('Amount must be positive')
+    .min(0.01, 'Amount must be at least 0.01')
+    .max(999999.99, 'Amount exceeds maximum limit')
+    .refine(
+      (val) => {
+        // Ensure amount has at most 2 decimal places (cents precision)
+        const decimalPlaces = (val.toString().split('.')[1] || '').length;
+        return decimalPlaces <= 2;
+      },
+      'Amount must have at most 2 decimal places'
+    ),
+  currencyCode: z.string()
+    .length(3, 'Currency code must be 3 characters')
+    .regex(/^[A-Z]{3}$/, 'Currency code must be uppercase letters')
+    .default('USD'),
   card: z.object({
     number: cardNumberSchema,
     expiryMonth: z.number().int().min(1).max(12),
@@ -129,7 +176,9 @@ export const paymentRequestSchema = z.object({
     cvv: cvvSchema,
     cardholderName: cardholderNameSchema,
   }),
-  description: z.string().optional(),
+  description: z.string()
+    .max(500, 'Description too long')
+    .optional(),
   recurring: z.boolean().optional().default(false),
   storeCard: z.boolean().optional().default(false),
 });

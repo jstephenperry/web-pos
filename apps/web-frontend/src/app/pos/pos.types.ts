@@ -96,6 +96,14 @@ export interface CheckoutModalProps {
 export interface TransactionCompleteModalProps {
   isOpen: boolean;
   onClose: () => void;
+  transactionId?: string;
+  amount?: number;
+  last4?: string;
+  cardBrand?: string;
+  authorizationCode?: string;
+  cartItems?: CartItem[];
+  subtotal?: number;
+  tax?: number;
 }
 
 export type FailureReason = 'invalid_cvv' | 'processor_failure' | 'network_error';

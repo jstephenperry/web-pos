@@ -37,8 +37,12 @@ web-pos/
 git clone <repository-url>
 cd web-pos
 
-# Copy environment configuration
+# Copy and configure environment variables
 cp .env.example .env
+# Edit .env and set all required values (see Setup section below)
+
+# Generate encryption key for cart data
+openssl rand -hex 32  # Add this to .env as CART_ENCRYPTION_KEY
 
 # Start all services
 docker-compose up -d
@@ -46,6 +50,29 @@ docker-compose up -d
 # Or use make
 make up
 ```
+
+### ⚠️ Important Setup Steps
+
+Before starting the services, you **MUST** configure environment variables:
+
+1. **Copy environment template:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Set required variables** (see `.env.example` for all options):
+   - `PAYMENT_DB_PASSWORD` - Strong password for payment database
+   - `KEYCLOAK_DB_PASSWORD` - Strong password for Keycloak database
+   - `KEYCLOAK_ADMIN_PASSWORD` - Admin password (change from default!)
+   - `CART_ENCRYPTION_KEY` - 64-character hex string (generate with `openssl rand -hex 32`)
+   - `CORS_ALLOWED_ORIGINS` - Comma-separated list of allowed origins (production only)
+
+3. **For production, also set:**
+   - `ENABLE_MOCK_PAYMENTS=false` - Disable mock payment processing
+   - `REQUIRE_AUTHENTICATION=true` - Require user login
+   - All other security-related variables
+
+**⚠️ NEVER use default passwords in production!**
 
 ### Access Services
 
@@ -238,15 +265,60 @@ npm test
 
 ## 📚 Documentation
 
+- **[Security Guide](SECURITY.md)** - Comprehensive security documentation
 - [Payment Service Documentation](services/payment/README.md)
 - [Payment Service Deployment Guide](services/payment/DEPLOYMENT.md)
 - [Frontend CORS Solution](apps/web-frontend/CORS_SOLUTION.md)
 
 ## 🔐 Security
 
+**📖 See [SECURITY.md](SECURITY.md) for comprehensive security documentation.**
+
+### Security Features
+
+This POS system includes:
+
+✅ **Authentication & Authorization**
+- OAuth2/OIDC with Keycloak integration
+- Role-based access control (RBAC)
+- JWT-based stateless authentication
+
+✅ **Data Encryption**
+- AES-256-GCM for cart data in localStorage
+- Card tokenization with Google Tink
+- Encrypted sensitive data storage
+
+✅ **Input Validation**
+- Luhn algorithm for card validation
+- Zod schema validation (frontend)
+- Jakarta Bean Validation (backend)
+- Strict size limits on all inputs
+
+✅ **Rate Limiting**
+- Per-IP and per-endpoint tracking
+- Configurable limits
+- DDoS detection
+- IP spoofing protection
+
+✅ **CORS Security**
+- No wildcard origins in production
+- Configurable origin whitelist
+- Proper preflight handling
+
+✅ **Security Headers**
+- Content Security Policy (CSP)
+- HSTS, X-Frame-Options
+- X-Content-Type-Options: nosniff
+
+✅ **Additional Features**
+- Receipt generation (print/download)
+- Secure logging with PII redaction
+- Feature flags for dev/prod separation
+- Environment validation on startup
+
 ### Development Credentials
 
-**⚠️ Never use these in production!**
+**⚠️ DEVELOPMENT ONLY - Never use these in production!**
 
 - Keycloak Admin: `admin` / `admin`
 - Payment User: `payment-user` / `password123`
@@ -254,18 +326,26 @@ npm test
 - Payment DB: `paymentuser` / `paymentpass`
 - Keycloak DB: `keycloak` / `keycloakpass`
 
-### Production Checklist
+### Production Security Checklist
 
-- [ ] Change all default passwords
-- [ ] Use secrets management (Docker Secrets, Vault)
-- [ ] Enable HTTPS/TLS
+- [ ] **Change ALL default passwords** (see `.env.example`)
+- [ ] **Set CART_ENCRYPTION_KEY** (generate with `openssl rand -hex 32`)
+- [ ] **Set ENABLE_MOCK_PAYMENTS=false**
+- [ ] **Configure CORS_ALLOWED_ORIGINS** for your domains
+- [ ] Use secrets management (Docker Secrets, Vault, AWS Secrets Manager)
+- [ ] Enable HTTPS/TLS with valid certificates
 - [ ] Configure production-grade databases
-- [ ] Enable rate limiting
-- [ ] Set up monitoring and logging
-- [ ] Configure backups
+- [ ] Set up monitoring and logging (ELK, Datadog, etc.)
+- [ ] Configure automated backups
 - [ ] Review Spring Security configuration
-- [ ] Audit Keycloak settings
+- [ ] Audit Keycloak settings and create production realm
 - [ ] Use environment-specific .env files
+- [ ] Implement proper key management (AWS KMS, Azure Key Vault)
+- [ ] Set up alerting for security events
+- [ ] Perform security testing (penetration testing, vulnerability scanning)
+- [ ] Review audit logs regularly
+
+**📖 See [SECURITY.md](SECURITY.md) for detailed security configuration and best practices.**
 
 ## 🎯 Makefile Commands
 
